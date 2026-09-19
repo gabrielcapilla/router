@@ -1,0 +1,15 @@
+# Nim and local build output
+/build/
+/release/
+/verify/
+/nimcache/
+/nimbledeps/
+
+# Generated release metadata
+/install.manifest
+/*.manifest
+
+# Local/editor files
+.DS_Store
+.env
+*.swp

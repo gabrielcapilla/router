@@ -1,0 +1,161 @@
+name: release
+
+"on":
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build ${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: baseline
+            asset: example-linux-x86_64
+            cflags: -march=x86-64
+          - variant: x86-64-v3
+            asset: example-linux-x86_64-v3
+            cflags: -march=x86-64-v3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.12'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build static executable
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+          CFLAGS: ${{ matrix.cflags }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p build
+          nim c --hints:off --verbosity:0 -d:release \
+            --passC:"${CFLAGS}" \
+            --passL:-static \
+            -o:"build/${ASSET}" \
+            src/example.nim
+          strip --strip-all "build/${ASSET}"
+
+      - name: Smoke-test executable
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          set -Eeuo pipefail
+          test "$("build/${ASSET}")" = "Hello, World!"
+          if readelf -l "build/${ASSET}" | grep -q 'INTERP'; then
+            echo "expected a static executable" >&2
+            exit 1
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: build/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: example-linux-x86_64*
+          path: release
+          merge-multiple: true
+
+      - name: Generate manifest
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          version="${RELEASE_VERSION#v}"
+          project="${GITHUB_REPOSITORY##*/}"
+          bash ci/generate-manifest.sh \
+            "${project}" \
+            "${version}" \
+            example \
+            release/install.manifest \
+            "linux|x86_64|baseline|example-linux-x86_64|release/example-linux-x86_64" \
+            "linux|x86_64|x86-64-v3|example-linux-x86_64-v3|release/example-linux-x86_64-v3"
+
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release create "${RELEASE_TAG}" \
+              --draft \
+              --title "${RELEASE_TAG}" \
+              --notes "Automated router example release."
+          fi
+
+      - name: Upload release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          gh release upload "${RELEASE_TAG}" \
+            release/install.manifest \
+            release/example-linux-x86_64 \
+            release/example-linux-x86_64-v3 \
+            --clobber
+
+      - name: Download and verify published assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          rm -rf verify
+          mkdir -p verify
+          gh release download "${RELEASE_TAG}" \
+            --pattern install.manifest \
+            --pattern 'example-linux-x86_64*' \
+            --dir verify \
+            --clobber
+          version="${RELEASE_VERSION#v}"
+          project="${GITHUB_REPOSITORY##*/}"
+          bash ci/generate-manifest.sh \
+            "${project}" \
+            "${version}" \
+            example \
+            verify/recomputed.manifest \
+            "linux|x86_64|baseline|example-linux-x86_64|verify/example-linux-x86_64" \
+            "linux|x86_64|x86-64-v3|example-linux-x86_64-v3|verify/example-linux-x86_64-v3"
+          cmp -- verify/install.manifest verify/recomputed.manifest
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release edit "${RELEASE_TAG}" --draft=false
