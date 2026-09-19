@@ -4,7 +4,7 @@ This is the experimental release project for the generic Bash installer. The Nim
 
 The workflow builds the `example` executable for Linux x86_64 baseline and x86-64-v3 targets, computes SHA-256 and byte sizes, generates `install.manifest`, and publishes a tagged GitHub Release.
 
-After publishing `v0.1.0` from a repository named `gabrielcapilla/router`, test the separate experimental website endpoint with:
+After publishing a version tag such as `v0.1.1` from a repository named `gabrielcapilla/router`, test the separate experimental website endpoint with:
 
 ```bash
 curl -sL gabrielcapilla.github.io/experimental | bash -s router
