@@ -2,4 +2,4 @@
 # uses this file as the main entry point of the application.
 
 when isMainModule:
-  echo("Hello, World!")
+  echo("Hello from router 0.1.2!")

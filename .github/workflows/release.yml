@@ -71,7 +71,7 @@ jobs:
           ASSET: ${{ matrix.asset }}
         run: |
           set -Eeuo pipefail
-          test "$("build/${ASSET}")" = "Hello, World!"
+          test "$("build/${ASSET}")" = "Hello from router 0.1.2!"
           if readelf -l "build/${ASSET}" | grep -q 'INTERP'; then
             echo "expected a static executable" >&2
             exit 1
