@@ -123,7 +123,7 @@ jobs:
           set -Eeuo pipefail
           version="${RELEASE_VERSION#v}"
           project="${GITHUB_REPOSITORY##*/}"
-          bash ci/generate-manifest.sh \
+          bash ci/manifest.sh \
             "${project}" \
             "${version}" \
             example \
@@ -213,7 +213,7 @@ jobs:
             <(printf '%s\n' "${actual[@]}")
           version="${RELEASE_VERSION#v}"
           project="${GITHUB_REPOSITORY##*/}"
-          bash ci/generate-manifest.sh \
+          bash ci/manifest.sh \
             "${project}" \
             "${version}" \
             example \
